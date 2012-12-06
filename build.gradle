@@ -37,18 +37,28 @@ buildscript {
 
 // External tools BEGIN ---------------------------------------------------
 
-// Sonar default configuration, should be removed once using Gradle 1.3
-// See https://github.com/gradle/gradle/pull/107
 sonar {
+    // Sonar default configuration, should be removed once using Gradle 1.3
+    // See https://github.com/gradle/gradle/pull/107
+
     server {
-        url = "http://localhost:9000/"
+      url =  System.getProperty("sonar.host.url") ?: "http://localhost:9000/"
     }
+
     database {
-        url = "jdbc:h2:tcp://localhost:9092/sonar"
-        driverClassName = "org.h2.Driver"
-        username = "sonar"
-        password = "sonar"
+      url = System.getProperty("sonar.jdbc.url") ?: "jdbc:h2:tcp://localhost:9092/sonar"
+      driverClassName = System.getProperty("sonar.jdbc.driver") ?: "org.h2.Driver"
+      username = System.getProperty("sonar.jdbc.username") ?: "sonar"
+      password = System.getProperty("sonar.jdbc.password") ?: "sonar"
     }
+
+/*    project {
+        dynamicAnalysis  = "reuseReports"
+        withProjectProperties { props ->
+            props["sonar.core.codeCoveragePlugin"] = "jacoco"
+            props["sonar.jacoco.reportPath"]       = "${buildDir}/jacoco.exec"
+        }
+    }*/
 }
 
 // IDEA plugin configuration
@@ -59,7 +69,6 @@ idea.project.ipr {
 }
 
 // External tools END -----------------------------------------------------
-
 
 allprojects {
 
@@ -303,6 +312,33 @@ allprojects {
   }
 } // allproject END -------------------------------------------------------
 
+subprojects { subproject ->
+    // See http://www.gradle.org/docs/current/userguide/dependency_management.html#sub:configurations
+    // and http://www.gradle.org/docs/current/dsl/org.gradle.api.artifacts.ConfigurationContainer.html
+    configurations {
+        jacoco //Configuration Group used by Sonar to provide Code Coverage using JaCoCo
+        sonar {
+          project {
+              dynamicAnalysis  = "reuseReports"
+              withProjectProperties { props ->
+                  props["sonar.core.codeCoveragePlugin"] = "jacoco"
+                  props["sonar.jacoco.reportPath"]       = "${buildDir}/jacoco.exec"
+              }
+          }
+        }
+    }
+
+    // dependencies that are common across all java projects
+    dependencies {
+        jacoco group: "org.jacoco", name: "org.jacoco.agent", version: "0.5.10.201208310627", classifier: "runtime"
+    }
+
+    test {
+        jvmArgs "-javaagent:${configurations.jacoco.asPath}=destfile=${subproject.buildDir}/jacoco.exec,includes=org.qi4j.*"
+    }
+}
+
+
 gradle.taskGraph.whenReady {taskGraph ->
   taskGraph.allTasks.last().doLast {
     if( rootProject.ext.testFailures )
@@ -355,11 +391,11 @@ task javadocs( type: Javadoc ) {
 
 // Build All
 task buildAll( dependsOn: [
-    javadocs, 
-    test, 
-    jar, 
-    subprojects*.dependencyReport, 
-    subprojects*.assemble, 
+    javadocs,
+    test,
+    jar,
+    subprojects*.dependencyReport,
+    subprojects*.assemble,
     ':org.qi4j.manual:manuals'
 ] ) { }
 // Prepare runtime dependencies download facility (metalink)
