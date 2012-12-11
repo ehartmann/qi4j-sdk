@@ -68,7 +68,6 @@ class Documentation extends DefaultTask
     generatePdf()
   }
 
-
   def void copyResources()
   {
     project.parent.subprojects.each { p ->
